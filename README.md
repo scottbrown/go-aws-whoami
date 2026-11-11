@@ -585,15 +585,16 @@ Requires Go 1.25+ and [Task](https://taskfile.dev).
 ```
 .
 ├── .github/
-│   ├── dependabot.yaml                 Weekly Go module and daily Actions updates
+│   ├── dependabot.yaml                 Weekly Go module (/ and /tools) and daily Actions updates
 │   └── workflows/
-│       ├── ci.yaml                     task check + task build on every push/PR
+│       ├── ci.yaml                     task check, build and sbom on every push/PR
 │       ├── sast.yaml                   CodeQL scan on main, PRs and weekly
 │       ├── automerge-dependabot.yaml   Auto-merges Dependabot PRs
 │       ├── verify-lockfile.yaml        Checks actions.lock on every PR and push to main
 │       ├── release.yaml                Tag-triggered multi-platform release
 │       └── actions.lock                Commits that every workflow's actions are pinned to
 ├── cmd/aws-whoami/   CLI entry point (Cobra)
+├── tools/            Separate Go module pinning build tools (cyclonedx-gomod)
 ├── principal.go      ARN parsing and principal types
 ├── policy.go         Account alias lookup policy
 ├── whoami.go         STS/IAM calls and the Client
@@ -608,7 +609,8 @@ Requires Go 1.25+ and [Task](https://taskfile.dev).
 | `task fmt`      | Format the source with `gofmt` |
 | `task check`    | Formatting check, vet and tests (what CI should run) |
 | `task build`    | Build `.build/aws-whoami`, stamping the version from `git describe` |
-| `task release VERSION=vX.Y.Z` | Cross-compile every OS/arch into `.build/dist/` with checksums |
+| `task release VERSION=vX.Y.Z` | Cross-compile every OS/arch into `.build/dist/` with checksums and an SBOM |
+| `task sbom`     | Generate a CycloneDX SBOM at `.build/dist/bom.json` |
 | `task actions:lock` | Regenerate `.github/workflows/actions.lock` |
 | `task actions:verify` | Check `actions.lock` without modifying anything |
 | `task clean`    | Remove `.build/` and `.test/` |
@@ -616,11 +618,19 @@ Requires Go 1.25+ and [Task](https://taskfile.dev).
 Tests use hand-written fakes for STS and IAM and never call AWS. Coverage must
 stay at or above 70%.
 
+Build tools live in their own module under `tools/`, declared with Go's `tool`
+directive and run with `go -C tools tool <name>`. They're pinned and
+checksum-verified in `tools/go.sum`, and Dependabot updates them. Their
+dependencies stay out of the main `go.mod`, so projects importing `awswhoami`
+don't inherit them. `cyclonedx-gomod` v1.12.0 needs Go 1.26, so Go downloads
+that toolchain automatically (checksum-verified) the first time you run
+`task sbom`.
+
 ### Continuous integration
 
 | Workflow | Trigger | What it does |
 |----------|---------|--------------|
-| `ci.yaml` | Every push and pull request | `task check` (gofmt, vet, tests) and `task build` |
+| `ci.yaml` | Every push and pull request | `task check` (gofmt, vet, tests), `task build` and `task sbom` |
 | `sast.yaml` | Pushes/PRs to `main`, and Tuesdays at 18:18 UTC | CodeQL static analysis for Go |
 | `automerge-dependabot.yaml` | Dependabot pull requests | Enables squash auto-merge for **Go module** updates (including major versions), so they merge once the required checks pass. GitHub Actions updates change `actions.lock` and wait for a human review |
 | `verify-lockfile.yaml` | Every pull request, and pushes to `main` | `gh actions-lock --verify`: fails if `actions.lock` is stale or a pin no longer verifies upstream |
@@ -679,7 +689,7 @@ The [release workflow](.github/workflows/release.yaml) then:
    | macOS   | `amd64`, `arm64`   |
    | Windows | `amd64`, `arm64`   |
 
-4. generates a CycloneDX SBOM (`bom.json`);
+4. generates a CycloneDX SBOM (`bom.json`) with `task sbom`, as part of `task release`;
 5. publishes a GitHub release with generated notes. The action creates the
    release as a draft, uploads the assets and only then publishes it, which is
    required because the repository has **immutable releases** enabled. Once

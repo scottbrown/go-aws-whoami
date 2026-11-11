@@ -28,13 +28,8 @@ jobs:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Run unit tests
         run: task check
-      - name: Compile all versions
+      - name: Compile all versions and generate SBOM
         run: task release VERSION="${GITHUB_REF_NAME}"
-      - name: Generate SBOM
-        uses: CycloneDX/gh-gomod-generate-sbom@v2.0.0
-        with:
-          version: v1
-          args: mod -licenses -json -output .build/dist/bom.json
       - name: Create Release
         uses: softprops/action-gh-release@v3.0.4
         with:
