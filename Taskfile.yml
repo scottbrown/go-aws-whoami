@@ -1,0 +1,95 @@
+version: '3'
+
+vars:
+  BINARY: aws-whoami
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  LDFLAGS: -s -w -X main.version={{.VERSION}}
+  DIST_DIR: .build/dist
+  PLATFORMS: >-
+    linux/amd64
+    linux/arm64
+    darwin/amd64
+    darwin/arm64
+    windows/amd64
+    windows/arm64
+
+tasks:
+  default:
+    cmds:
+      - task: test
+
+  build:
+    desc: Build the aws-whoami binary into .build/
+    cmds:
+      - mkdir -p .build
+      - go build -ldflags "{{.LDFLAGS}}" -o .build/{{.BINARY}} ./cmd/{{.BINARY}}
+
+  test:
+    desc: Run unit tests with coverage written to .test/
+    cmds:
+      - mkdir -p .test
+      - go test -race -coverprofile .test/coverage.out ./...
+      - go tool cover -func .test/coverage.out | tail -1
+
+  coverage:
+    desc: Generate an HTML coverage report in .test/
+    deps: [test]
+    cmds:
+      - go tool cover -html .test/coverage.out -o .test/coverage.html
+
+  fmt:
+    desc: Format Go source
+    cmds:
+      - gofmt -w .
+
+  vet:
+    desc: Run go vet
+    cmds:
+      - go vet ./...
+
+  check:
+    desc: Run formatting check, vet and tests
+    cmds:
+      - test -z "$(gofmt -l .)"
+      - task: vet
+      - task: test
+
+  release:
+    desc: Build release archives for every OS/arch into .build/dist/ (e.g. task release VERSION=v1.0.0)
+    requires:
+      vars: [VERSION]
+    cmds:
+      - rm -rf {{.DIST_DIR}}
+      - mkdir -p {{.DIST_DIR}}
+      - for:
+          var: PLATFORMS
+        task: package
+        vars:
+          PLATFORM: '{{.ITEM}}'
+          VERSION: '{{.VERSION}}'
+      - cd {{.DIST_DIR}} && shasum -a 256 *.tar.gz > checksums.txt
+
+  package:
+    internal: true
+    vars:
+      GOOS: '{{index (splitList "/" .PLATFORM) 0}}'
+      GOARCH: '{{index (splitList "/" .PLATFORM) 1}}'
+      EXT: '{{if eq .GOOS "windows"}}.exe{{end}}'
+      STAGE_DIR: .build/{{.GOOS}}-{{.GOARCH}}
+      ARCHIVE: '{{.BINARY}}_{{.VERSION}}_{{.GOOS}}_{{.GOARCH}}.tar.gz'
+    env:
+      CGO_ENABLED: '0'
+      GOOS: '{{.GOOS}}'
+      GOARCH: '{{.GOARCH}}'
+    cmds:
+      - rm -rf {{.STAGE_DIR}}
+      - mkdir -p {{.STAGE_DIR}}
+      - go build -trimpath -ldflags "{{.LDFLAGS}}" -o {{.STAGE_DIR}}/{{.BINARY}}{{.EXT}} ./cmd/{{.BINARY}}
+      - cp LICENSE README.md {{.STAGE_DIR}}/
+      - tar czf {{.DIST_DIR}}/{{.ARCHIVE}} -C {{.STAGE_DIR}} .
+
+  clean:
+    desc: Remove build and test artifacts
+    cmds:
+      - rm -rf .build .test

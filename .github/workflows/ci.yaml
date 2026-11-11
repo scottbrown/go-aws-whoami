@@ -1,0 +1,26 @@
+---
+name: CI
+on: [push, pull_request]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout the code
+        uses: actions/checkout@v7
+      - name: Install Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - name: Install Task
+        uses: arduino/setup-task@v3
+        with:
+          repo-token: "${{ secrets.GITHUB_TOKEN }}"
+      - name: Run formatting check, vet and unit tests
+        run: task check
+      - name: Build a local artifact
+        run: task build
