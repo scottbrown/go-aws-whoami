@@ -24,3 +24,5 @@ jobs:
         run: task check
       - name: Build a local artifact
         run: task build
+      - name: Generate the SBOM
+        run: task sbom

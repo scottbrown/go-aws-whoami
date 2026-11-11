@@ -79,6 +79,13 @@ tasks:
           PLATFORM: '{{.ITEM}}'
           VERSION: '{{.VERSION}}'
       - cd {{.DIST_DIR}} && shasum -a 256 *.tar.gz > checksums.txt
+      - task: sbom
+
+  sbom:
+    desc: Generate a CycloneDX SBOM of the module at .build/dist/bom.json
+    cmds:
+      - mkdir -p {{.DIST_DIR}}
+      - go -C tools tool cyclonedx-gomod mod -licenses -json -output ../{{.DIST_DIR}}/bom.json ..
 
   package:
     internal: true
