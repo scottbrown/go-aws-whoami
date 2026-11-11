@@ -11,13 +11,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout the code
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
       - name: Install Go
-        uses: actions/setup-go@v7
+        uses: actions/setup-go@v7.0.0
         with:
           go-version-file: go.mod
       - name: Install Task
-        uses: arduino/setup-task@v3
+        uses: arduino/setup-task@v3.0.0
         with:
           repo-token: "${{ secrets.GITHUB_TOKEN }}"
       - name: Run formatting check, vet and unit tests

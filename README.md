@@ -590,7 +590,9 @@ Requires Go 1.25+ and [Task](https://taskfile.dev).
 │       ├── ci.yaml                     task check + task build on every push/PR
 │       ├── sast.yaml                   CodeQL scan on main, PRs and weekly
 │       ├── automerge-dependabot.yaml   Auto-merges Dependabot PRs
-│       └── release.yaml                Tag-triggered multi-platform release
+│       ├── verify-lockfile.yaml        Checks actions.lock on every PR and push to main
+│       ├── release.yaml                Tag-triggered multi-platform release
+│       └── actions.lock                Commits that every workflow's actions are pinned to
 ├── cmd/aws-whoami/   CLI entry point (Cobra)
 ├── principal.go      ARN parsing and principal types
 ├── policy.go         Account alias lookup policy
@@ -607,6 +609,8 @@ Requires Go 1.25+ and [Task](https://taskfile.dev).
 | `task check`    | Formatting check, vet and tests (what CI should run) |
 | `task build`    | Build `.build/aws-whoami`, stamping the version from `git describe` |
 | `task release VERSION=vX.Y.Z` | Cross-compile every OS/arch into `.build/dist/` with checksums |
+| `task actions:lock` | Regenerate `.github/workflows/actions.lock` |
+| `task actions:verify` | Check `actions.lock` without modifying anything |
 | `task clean`    | Remove `.build/` and `.test/` |
 
 Tests use hand-written fakes for STS and IAM and never call AWS. Coverage must
@@ -618,13 +622,37 @@ stay at or above 70%.
 |----------|---------|--------------|
 | `ci.yaml` | Every push and pull request | `task check` (gofmt, vet, tests) and `task build` |
 | `sast.yaml` | Pushes/PRs to `main`, and Tuesdays at 18:18 UTC | CodeQL static analysis for Go |
-| `automerge-dependabot.yaml` | Dependabot pull requests | Enables squash auto-merge; approves minor and patch updates (major updates wait for a human review) |
+| `automerge-dependabot.yaml` | Dependabot pull requests | Enables squash auto-merge for **Go module** updates (including major versions), so they merge once the required checks pass. GitHub Actions updates change `actions.lock` and wait for a human review |
+| `verify-lockfile.yaml` | Every pull request, and pushes to `main` | `gh actions-lock --verify`: fails if `actions.lock` is stale or a pin no longer verifies upstream |
 | `release.yaml` | `v*` tags | See [Releasing](#releasing) |
 
-Dependabot checks Go modules weekly and GitHub Actions daily. Auto-merge needs
-**Settings → General → Allow auto-merge** turned on, and a branch protection
-rule on `main` that requires the CI check (otherwise auto-merge has nothing to
-wait for).
+Dependabot checks Go modules weekly and GitHub Actions daily.
+
+#### Workflow lockfile
+
+Every action the workflows use, including transitive ones, is pinned to a
+specific commit in
+[`.github/workflows/actions.lock`](.github/workflows/actions.lock), using
+GitHub's [workflow dependency lockfiles](https://docs.github.com/en/actions/concepts/security/workflow-dependency-lockfiles).
+At job start, the runner executes the locked commit even if the tag in a
+`uses:` line has since been moved upstream.
+
+- Install the tool once: `gh extension install github/gh-actions-lock --pin v0.4.1`.
+- After adding a workflow or changing any `uses:` line, run `task actions:lock`
+  and commit the workflow change and the lockfile together.
+- Never edit `actions.lock` by hand.
+- Dependabot updates the lockfile in the same PR as the version bump. Review
+  the `commit` changes in those diffs: that's the code your workflows will run.
+
+The **Protect main** ruleset on the default branch:
+
+- requires the `test` (CI) and `CodeQL Scan (go)` checks to pass before merging;
+- blocks force-pushes and branch deletion;
+- lets repository admins bypass these rules.
+
+Auto-merge relies on this ruleset: without required checks, a Dependabot PR
+would merge as soon as auto-merge is enabled, before CI has run. It also needs
+**Settings → General → Allow auto-merge** turned on.
 
 ### Releasing
 
@@ -648,7 +676,11 @@ The [release workflow](.github/workflows/release.yaml) then:
    | Windows | `amd64`, `arm64`   |
 
 4. generates a CycloneDX SBOM (`bom.json`);
-5. publishes a GitHub release with generated notes and these assets:
+5. publishes a GitHub release with generated notes. The action creates the
+   release as a draft, uploads the assets and only then publishes it, which is
+   required because the repository has **immutable releases** enabled. Once
+   published, a release's assets and tag can't be changed, so a bad release
+   is fixed by tagging a new version. The assets are:
    - `aws-whoami_<version>_<os>_<arch>.tar.gz` (binary, `LICENSE`, `README.md`)
    - `checksums.txt` (SHA-256 of every archive)
    - `bom.json`

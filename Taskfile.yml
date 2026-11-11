@@ -55,6 +55,16 @@ tasks:
       - task: vet
       - task: test
 
+  actions:lock:
+    desc: Regenerate .github/workflows/actions.lock after changing any workflow uses
+    cmds:
+      - gh actions-lock
+
+  actions:verify:
+    desc: Check actions.lock matches the workflows and still verifies upstream
+    cmds:
+      - gh actions-lock --verify
+
   release:
     desc: Build release archives for every OS/arch into .build/dist/ (e.g. task release VERSION=v1.0.0)
     requires:
