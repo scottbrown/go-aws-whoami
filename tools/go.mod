@@ -1,6 +1,8 @@
 module github.com/scottbrown/go-aws-whoami/tools
 
-go 1.26.0
+go 1.27.0
+
+toolchain go1.27.4
 
 tool github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod
 

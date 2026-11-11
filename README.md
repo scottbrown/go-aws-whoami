@@ -86,7 +86,7 @@ On macOS, binaries downloaded with a browser are quarantined by Gatekeeper; clea
 it with `xattr -d com.apple.quarantine aws-whoami`. (`curl` downloads are not
 quarantined.)
 
-Or, with Go 1.25 or later:
+Or, with Go 1.27 or later:
 
 ```bash
 go install github.com/scottbrown/go-aws-whoami/cmd/aws-whoami@latest
@@ -580,7 +580,7 @@ The output format, JSON keys and environment variable behave the same as
 
 ## Development
 
-Requires Go 1.25+ and [Task](https://taskfile.dev).
+Requires Go 1.27+ and [Task](https://taskfile.dev).
 
 ```
 .
@@ -622,9 +622,16 @@ Build tools live in their own module under `tools/`, declared with Go's `tool`
 directive and run with `go -C tools tool <name>`. They're pinned and
 checksum-verified in `tools/go.sum`, and Dependabot updates them. Their
 dependencies stay out of the main `go.mod`, so projects importing `awswhoami`
-don't inherit them. `cyclonedx-gomod` v1.12.0 needs Go 1.26, so Go downloads
-that toolchain automatically (checksum-verified) the first time you run
-`task sbom`.
+don't inherit them.
+
+Both modules declare `go 1.27.0` and `toolchain go1.27.4`. If your installed Go
+is older, Go downloads 1.27.4 automatically (checksum-verified). CI and
+releases build with the toolchain version, which `actions/setup-go` reads from
+`go.mod`. When a new Go patch release comes out, bump it in both modules:
+
+```bash
+go mod edit -toolchain=go1.27.N && go -C tools mod edit -toolchain=go1.27.N
+```
 
 ### Continuous integration
 
