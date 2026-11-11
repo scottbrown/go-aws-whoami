@@ -637,6 +637,10 @@ GitHub's [workflow dependency lockfiles](https://docs.github.com/en/actions/conc
 At job start, the runner executes the locked commit even if the tag in a
 `uses:` line has since been moved upstream.
 
+The repository's **Require lockfile** Actions policy is active for all
+workflows, so GitHub refuses to run any workflow that isn't in `actions.lock`.
+A new workflow file must be locked in the same commit that adds it.
+
 - Install the tool once: `gh extension install github/gh-actions-lock --pin v0.4.1`.
 - After adding a workflow or changing any `uses:` line, run `task actions:lock`
   and commit the workflow change and the lockfile together.
